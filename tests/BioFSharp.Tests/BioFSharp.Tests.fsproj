@@ -10,10 +10,9 @@
     <EmbeddedResource Include="resources\Glucagon.txt" />
     <EmbeddedResource Include="resources\HasA.txt" />
     <EmbeddedResource Include="resources\HETATMSequence.txt" />
-    <EmbeddedResource Include="resources\pdbParser\*.pdb" />
-    <EmbeddedResource Include="resources\pdbParser\*.csv" />
     <None Include="fixtures/**" CopyToOutputDirectory="Always" />
-    <Compile Include="Utils.fs" />
+	<None Include="resources/**" CopyToOutputDirectory="Always" />
+	<Compile Include="Utils.fs" />
     <Compile Include="ReferenceObjects\BioSeq.fs" />
     <Compile Include="ReferenceObjects\Fasta.fs" />
     <Compile Include="ReferenceObjects\Fastq.fs" />

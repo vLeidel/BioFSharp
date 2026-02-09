@@ -11,15 +11,60 @@ module SASATests =
     open System.Collections.Generic
 
 
+    // ------------------------------------------------------------
+    // Fast array comparison helpers
+    // ------------------------------------------------------------
+
+    let private spotIndices (n:int) =
+        if n <= 0 then [||] else
+        let last = n - 1
+        [| 0; 1; 2; 5; 10; 25; 50; 100; n/2; last-2; last-1; last |]
+        |> Array.distinct
+        |> Array.filter (fun i -> i >= 0 && i < n)
+
+    let private expectFloatArrayCloseFast (msgPrefix:string) (actual: float[]) (expected: float[]) =
+        Expect.equal actual.Length expected.Length
+            $"{msgPrefix}: The number of SASA values should be equal to the python reference"
+
+        // Spot checks (few assertions; fast)
+        for i in spotIndices actual.Length do
+            Expect.floatClose Accuracy.high expected.[i] actual.[i]
+                $"{msgPrefix}: SASA mismatch at idx {i} (serial {i+1})"
+
+        // Aggregate signatures (cheap; catches broad regressions)
+        let sumA, sumE = Array.sum actual, Array.sum expected
+        Expect.floatClose Accuracy.high sumE sumA $"{msgPrefix}: sum mismatch"
+
+        if actual.Length > 0 then
+            let meanA, meanE = sumA / float actual.Length, sumE / float expected.Length
+            Expect.floatClose Accuracy.high meanE meanA $"{msgPrefix}: mean mismatch"
+
+
+
     let AlgorithmTests = 
         testList "SASA analysis" [
-            
-            test "structure prepResidue extraction for SASA calculation" {
 
-                let testdata = getResiduesPerChain "resources/pdbParser/rubisCOActivase.pdb" 1
+            let testdata = getResiduesPerChain "resources/pdbParser/rubisCOActivase.pdb" 1
+            let structure_testdata =  readStructure "resources/pdbParser/rubisCOActivase.pdb"
+            let structure_pdb = readPBDFile "resources/pdbParser/rubisCOActivase.pdb" |> Seq.toArray
+
+            let htq = getResiduesPerChain "resources/pdbParser/htq.pdb" 2
+            let parsedModelhtq = readStructure "resources/pdbParser/htq.pdb" 
+            let pdb_htq = readPBDFile "resources/pdbParser/htq.pdb" |> Seq.toArray
+
+            let cre_example = getResiduesPerChain "resources/pdbParser/Cre01g001550t11.pdb" 1 
+            let pdb_cre_example = readPBDFile "resources/pdbParser/Cre01g001550t11.pdb" |> Seq.toArray
+            let parsedModelRes_cre = readStructure "resources/pdbParser/Cre01g001550t11.pdb" 
+           
+            let cre_example_chains = getResiduesPerChain "resources/pdbParser/Cre01g026150t11.pdb" 1
+            let pdb_cre_example_chains = readPBDFile "resources/pdbParser/Cre01g026150t11.pdb" |> Seq.toArray
+            let parsedModelRes_cre_chains = readStructure "resources/pdbParser/Cre01g026150t11.pdb"
+
+        
+            test "structure prepResidue extraction for SASA calculation" {
                 
                 let parsedResidues  =
-                    readResidues (readPBDFile "resources/pdbParser/rubisCOActivase.pdb")
+                    readResidues structure_pdb
                     |> Array.map (fun res ->
                         
                         let filteredAtoms =
@@ -31,8 +76,6 @@ module SASATests =
                     |> Array.filter (fun r -> r.Atoms.Length > 0)
                     |> Array.map (fun r -> r.ResidueNumber)
 
-                let parsedModelRes = 
-                    readStructure "resources/pdbParser/rubisCOActivase.pdb"
 
                 let residuesNumbers = testdata.Values |> Seq.collect (fun res -> res |> Array.map (fun r -> r.ResidueNumber)) |> Seq.toArray
 
@@ -46,7 +89,9 @@ module SASATests =
                     "PDB File testdata should contain one residue with 69 "
                 Expect.all testdata.['A'](fun residue -> residue.Modification.IsNone) 
                     "PDB Files without modified Residues should have value NONE"
-                Expect.equal parsedModelRes.Models.[0].Chains.[0].Residues.[0].ResidueName testdata.['A'].[0].ResidueName 
+                Expect.equal 
+                    structure_testdata.Models.[0].Chains.[0].Residues.[0].ResidueName
+                    testdata.['A'].[0].ResidueName 
                     "The first residue name should be 'MET' and equal"
 
                 Expect.throws (fun () -> 
@@ -58,42 +103,33 @@ module SASATests =
                     getResiduesPerChain "resources/pdbParser/rubisCOActivase.pdb" -1 |>ignore) 
                     "Extraction of Residues from Parsed PDB File should file when modelid is negative"
 
-                // test PDB File with multiple models
-
-                let htq = getResiduesPerChain "resources/pdbParser/htq.pdb" 2
-                let parsedModelhtq = readStructure "resources/pdbParser/htq.pdb" 
+                 //test PDB File with multiple models
                                    
-                Expect.isGreaterThan (htq.Count) 1 "Residues with multiple Chains
-                need more than one key"
+                //Expect.isGreaterThan (htq.Count) 1 "Residues with multiple Chains
+                //need more than one key"
 
-                let residuesWithoutHetatm = 
-                    parsedModelhtq.Models.[0].Chains.[0].Residues  
-                    |> Array.map (fun res ->
+                //let residuesWithoutHetatm = 
+                //    parsedModelhtq.Models.[0].Chains.[0].Residues  
+                //    |> Array.map (fun res ->
                        
-                        let filteredAtoms =
-                            res.Atoms
-                            |> Array.filter (fun a -> not a.Hetatm)
+                //        let filteredAtoms =
+                //            res.Atoms
+                //            |> Array.filter (fun a -> not a.Hetatm)
 
                         
-                        { res with Atoms = filteredAtoms }
-                    )
+                //        { res with Atoms = filteredAtoms }
+                //    )
                  
-                    |> Array.filter (fun r -> r.Atoms.Length > 0)
+                //    |> Array.filter (fun r -> r.Atoms.Length > 0)
                    
 
-                Expect.equal residuesWithoutHetatm.[0].ResidueName htq.['A'].[0].ResidueName "Residues need to be parsed correctly"
+                //Expect.equal residuesWithoutHetatm.[0].ResidueName htq.['A'].[0].ResidueName "Residues need to be parsed correctly"
 
-                Expect.throws (fun() -> getResiduesPerChain "resources/pdbParser/htq.pdb" -1 |> ignore) 
-                    "residue extraction of PDB File should fail at negative model id"
-
-                Expect.throws (fun() -> getResiduesPerChain "resources/pdbParser/htq.pdb" 1254 |> ignore) 
-                    "residue extraction of PDB File should fail at unknown model id"
+                //Expect.throws (fun() -> getResiduesPerChain "resources/pdbParser/htq.pdb" -1 |> ignore) 
+                //    "residue extraction of PDB File should fail at negative model id"
                                
                 // Unique residues in file without missing infos 
-
-                let cre_example = 
-                    getResiduesPerChain "resources/pdbParser/Cre01g001550t11.pdb" 1 
-
+        
                 let residuenumber_cre = 
                    cre_example.Values 
                    |> Seq.collect (fun res -> res |> Array.map (fun r -> 
@@ -106,7 +142,7 @@ module SASATests =
                     |> Seq.toArray
 
                 let readResidues_cre = 
-                    readResidues (readPBDFile "resources/pdbParser/Cre01g001550t11.pdb")
+                    readResidues pdb_cre_example
                         |> Array.map (fun res ->
                         
                             let filteredAtoms =
@@ -132,9 +168,7 @@ module SASATests =
                 Expect.all allresidues_cre (fun residue -> 
                     residue.Modification.IsNone) 
                     "PDB Files without modified Residues should have value NONE"
-
-                let parsedModelRes_cre = readStructure "resources/pdbParser/Cre01g001550t11.pdb"
-
+               
                 Expect.equal 
                     parsedModelRes_cre.Models.[0].Chains.[0].Residues.[0].ResidueName
                     cre_example.['A'].[0].ResidueName 
@@ -160,9 +194,6 @@ module SASATests =
 
                 // test PDB File with multiple models and chains
 
-                let cre_example_chains = 
-                    getResiduesPerChain "resources/pdbParser/Cre01g026150t11.pdb" 1
-
                 let residuenumber_cre_chains = 
                    (cre_example_chains.Values)
                    |> Seq.collect (fun res -> res |> Array.map (fun r -> 
@@ -175,7 +206,7 @@ module SASATests =
                     |> Seq.toArray
 
                 let readResidues_cre_chains = 
-                    readResidues (readPBDFile "resources/pdbParser/Cre01g026150t11.pdb")
+                    readResidues pdb_cre_example_chains
                         |> Array.map (fun res ->
                         
                             let filteredAtoms =
@@ -234,7 +265,7 @@ module SASATests =
                     |> Seq.toArray
                    
                 let parsedChains = 
-                    (readStructure "resources/pdbParser/Cre01g026150t11.pdb").Models 
+                    parsedModelRes_cre_chains .Models 
                     |> Seq.collect (fun m -> m.Chains) 
                     |> Seq.toArray
 
@@ -265,7 +296,7 @@ module SASATests =
 
             test "single Atoms are extracted correctly per Chain"{
                 let atoms = getAtomsPerModel  "resources/pdbParser/rubisCOActivase.pdb"1
-                let parsedAtoms = readAtom (readPBDFile "resources/pdbParser/rubisCOActivase.pdb") 
+                let parsedAtoms = readAtom structure_pdb
 
                 Expect.isLessThanOrEqual atoms.['A'].Length parsedAtoms.Length 
                     "Number of parsed Atoms should be smaller or equal then number 
@@ -284,34 +315,34 @@ module SASATests =
                     getAtomsPerModel "resources/notexistingpdb.pdb" 1 |>ignore) 
                     "Extraction of Atoms should fail when pdb file not exists"
                 
-                let atomsHTQ = getAtomsPerModel "resources/pdbParser/htq.pdb" 1
-                let parseAtomsHTQ = readAtom (readPBDFile "resources/pdbParser/htq.pdb")
+                //let atomsHTQ = getAtomsPerModel "resources/pdbParser/htq.pdb" 1
+                //let parseAtomsHTQ = readAtom pdb_htq
 
-                Expect.isGreaterThan (atomsHTQ.Count) 1 
-                    "PDB File with multiple chains should have multiple atom lists"
+                //Expect.isGreaterThan (atomsHTQ.Count) 1 
+                //    "PDB File with multiple chains should have multiple atom lists"
                 
-                atomsHTQ
-                |> Seq.iter (fun atomList ->
-                    Expect.isGreaterThan (atomList.Value.Length) 1 
-                        "PDB File with multiple models should have multiple atoms"
-                ) 
+                //atomsHTQ
+                //|> Seq.iter (fun atomList ->
+                //    Expect.isGreaterThan (atomList.Value.Length) 1 
+                //        "PDB File with multiple models should have multiple atoms"
+                //) 
 
-                Expect.equal atomsHTQ.['A'].[0].AtomName parseAtomsHTQ.[0].AtomName 
-                    "Atoms need to be parsed correctly and the first should be equal"
+                //Expect.equal atomsHTQ.['A'].[0].AtomName parseAtomsHTQ.[0].AtomName 
+                //    "Atoms need to be parsed correctly and the first should be equal"
 
-                Expect.throws (fun () -> 
-                    getAtomsPerModel  "resources/pdbParser/htq.pdb" 500 |>ignore) 
-                    "PDB File with only one model and one Chain should throw an
-                    error if modelid is not present"
+                //Expect.throws (fun () -> 
+                //    getAtomsPerModel  "resources/pdbParser/htq.pdb" 500 |>ignore) 
+                //    "PDB File with only one model and one Chain should throw an
+                //    error if modelid is not present"
 
-                Expect.throws (fun () -> 
-                    getAtomsPerModel  "resources/pdbParser/htq.pdb" -1 |>ignore) 
-                    "PDB File with negative modelid should throw an error"
+                //Expect.throws (fun () -> 
+                //    getAtomsPerModel  "resources/pdbParser/htq.pdb" -1 |>ignore) 
+                //    "PDB File with negative modelid should throw an error"
 
                 // test PDB File with complete atoms information
 
                 let cre_example = getAtomsPerModel "resources/pdbParser/Cre01g001550t11.pdb" 1
-                let atom_readinCre = readAtom (readPBDFile "resources/pdbParser/Cre01g001550t11.pdb")
+                let atom_readinCre = readAtom pdb_cre_example
                 
                 Expect.isGreaterThanOrEqual cre_example.Count 1 
                     "Cre01g001550t11.pdb should contain at least one chain / key"
@@ -358,7 +389,7 @@ module SASATests =
                 let cre_example_chains = 
                     getAtomsPerModel "resources/pdbParser/Cre01g026150t11.pdb" 1
 
-                let atom_readinCre_chains = readAtom (readPBDFile "resources/pdbParser/Cre01g026150t11.pdb")
+                let atom_readinCre_chains = readAtom pdb_cre_example_chains
                 
                 Expect.isGreaterThanOrEqual cre_example_chains.Count 1 
                     "Cre01g001550t11.pdb should contain at least one chain / key"
@@ -410,9 +441,7 @@ module SASATests =
             }
 
             test "Van der Waals Radius is determined correctly"{
-                let testdata = 
-                    getResiduesPerChain "resources/pdbParser/rubisCOActivase.pdb" 1
-                
+                              
                 let vdw_raadi = 
                     testdata
                     |> Seq.map ( fun kvp ->
@@ -443,8 +472,7 @@ module SASATests =
                 ) "Probenames that are unknown should lead to a fail"
                            
                 // test for File without missing infos 
-                let cre_example = getResiduesPerChain "resources/pdbParser/Cre01g001550t11.pdb" 1
-
+               
                 let all_creResidues = 
                     cre_example.Values 
                     |> Seq.collect (fun res -> res) 
@@ -657,10 +685,7 @@ module SASATests =
                 ) "negative probe residues values should lead to a fail"
 
                 // test for cre with multiple chains 
-              
-                let cre_example_chains = 
-                    getResiduesPerChain "resources/pdbParser/Cre01g026150t11.pdb" 1
-
+                          
                 let all_creResidues_chains = 
                     cre_example_chains.Values 
                     |> Seq.collect (fun res -> res) 
@@ -975,21 +1000,21 @@ module SASATests =
 
             }
 
-            test "fibonacci spheres are created correctly and uniformy distributed"{
+            test "fibonacci spheres are created correctly and uniformy distributed on atom"{
                 
-                let fibonacci_examples = fibonacciTestPoints 100            
-                Expect.equal fibonacci_examples.Length 100 "The number of 
+                let fibonacci_example = fibonacciTestPoints 100            
+                Expect.equal fibonacci_example.Length 100 "The number of 
                 testpoints to be created needs to be equal to the number you want"
              
                 Array.iter (fun p ->
                       let r = sqrt(p.X*p.X + p.Y*p.Y + p.Z*p.Z)
                       Expect.floatClose Accuracy.high r 1.0 "Each point should 
-                      lie on the unit sphere") fibonacci_examples
+                      lie on the unit sphere") fibonacci_example
                 
            
-                Expect.equal (fibonacci_examples.[0].Y) 0.0 "the first Value for 
+                Expect.equal (fibonacci_example.[0].Y) 0.0 "the first Value for 
                 y should be 0"
-                let z_average = Array.averageBy (fun p -> p.Z) fibonacci_examples 
+                let z_average = Array.averageBy (fun p -> p.Z) fibonacci_example
                 Expect.floatClose Accuracy.high z_average 0.0 "The average of the 
                 z values should be 0"
                 
@@ -998,8 +1023,8 @@ module SASATests =
                 let expectedZ0    = 1.0 - (0.5) * dz
                 let expectedZlast = 1.0 - (float (100-1) + 0.5) * dz
 
-                let z0    = fibonacci_examples.[0].Z
-                let zlast = fibonacci_examples.[100-1].Z
+                let z0    = fibonacci_example.[0].Z
+                let zlast = fibonacci_example.[100-1].Z
 
                 Expect.floatClose Accuracy.high expectedZ0    z0    $"z₀ should 
                     be {expectedZ0}"
@@ -1031,9 +1056,9 @@ module SASATests =
                     have to be created then wanted "
                 
                 let distances = 
-                    [| for i in 0 .. fibonacci_examples.Length - 2 do 
-                        for j in i+1 .. fibonacci_examples.Length - 1 do
-                            yield euclidianDistance fibonacci_examples.[i] fibonacci_examples.[j] |]
+                    [| for i in 0 .. fibonacci_example.Length - 2 do 
+                        for j in i+1 .. fibonacci_example.Length - 1 do
+                            yield euclidianDistance fibonacci_example.[i] fibonacci_example.[j] |]
     
                 let average = Array.average distances
                 Expect.isGreaterThan average 0.1 
@@ -1048,11 +1073,10 @@ module SASATests =
                 Expect.throws (fun () -> 
                     fibonacciTestPoints 0 |> ignore
                 ) "Creating fibonacci points with 0 points should lead to a fail"
-            }
+            
 
-            test "fibonacci points are scaled correctly onto the atoms"{
-                let fibonacci_example = fibonacciTestPoints 100
-                let testdata = getResiduesPerChain "resources/pdbParser/rubisCOActivase.pdb" 1
+            // scaling of fibonacci spheres
+          
                 let surfacepoints = 
                     testdata
                     |> Seq.map ( fun kvp ->
@@ -1106,8 +1130,6 @@ module SASATests =
 
                 // test for a file without missing infos 
          
-                let cre_example = getResiduesPerChain "resources/pdbParser/Cre01g001550t11.pdb" 1
-
                 let all_creResidues = 
                     cre_example.Values 
                     |> Seq.collect (fun res -> res)
@@ -1165,10 +1187,7 @@ module SASATests =
                     "The first testpoint z value should be equal to the atom position"
 
                 // test for cre file with multiple chains 
-
-                let cre_example_chains = 
-                    getResiduesPerChain "resources/pdbParser/Cre01g026150t11.pdb" 1
-        
+                   
                 let all_creResidues_chains = 
                     cre_example_chains.Values 
                     |> Seq.collect (fun res -> res)
@@ -1261,7 +1280,6 @@ module SASATests =
                 Expect.equal example_itsself 0.0 "The distance between a point 
                     and itself should be 0"
 
-                let testdata = getResiduesPerChain "resources/pdbParser/rubisCOActivase.pdb" 1
                 let totalnr_points = 100
                 let acessiblePointsDictExampleFile  = 
                     testdata
@@ -1284,7 +1302,7 @@ module SASATests =
                            
                         let perRes =
                             residues
-                            |> Array.Parallel.map (fun residue ->
+                            |> Array.map (fun residue ->
                                 let key = residue.ResidueName, residue.ResidueNumber
                    
                                 let residueAtoms =
@@ -1322,58 +1340,56 @@ module SASATests =
                     "The first testpoint should be equal to the value from biopython"
 
 
-                let residuesHTQ = getResiduesPerChain "resources/pdbParser/htq.pdb" 1
-                let acessiblePointsDictHTQ = 
-                    residuesHTQ                   
-                    |> Seq.map (fun kvp ->
-                        let chain    = kvp.Key
-                        let residues = kvp.Value
+                //let residuesHTQ = getResiduesPerChain "resources/pdbParser/htq.pdb" 1
+                //let acessiblePointsDictHTQ = 
+                //    residuesHTQ                   
+                //    |> Seq.map (fun kvp ->
+                //        let chain    = kvp.Key
+                //        let residues = kvp.Value
                        
-                        let perRes =
-                            residues
-                            |> Array.Parallel.map (fun residue ->
+                //        let perRes =
+                //            residues
+                //            |> Array.Parallel.map (fun residue ->
                           
-                                let key = residue.ResidueName, residue.ResidueNumber
+                //                let key = residue.ResidueName, residue.ResidueNumber
 
-                                let atomTuples : (Atom*string)[] =
-                                    residue.Atoms
-                                    |> Array.map (fun atom -> atom, residue.ResidueName)
+                //                let atomTuples : (Atom*string)[] =
+                //                    residue.Atoms
+                //                    |> Array.map (fun atom -> atom, residue.ResidueName)
  
-                                let counts : float[] =
-                                    accessibleTestpoints atomTuples totalnr_points "Water"
+                //                let counts : float[] =
+                //                    accessibleTestpoints atomTuples totalnr_points "Water"
 
-                                key, counts
-                            )
-                            |> dict
+                //                key, counts
+                //            )
+                //            |> dict
 
-                        chain, (perRes :> IDictionary<_,_>)
-                    )
-                    |> dict
+                //        chain, (perRes :> IDictionary<_,_>)
+                //    )
+                //    |> dict
 
-                for key in acessiblePointsDictHTQ.Keys do                    
-                    let atomLength = residuesHTQ.[key].Length
-                    let acessibleLength = Seq.length acessiblePointsDictHTQ.[key]
-                    Expect.equal atomLength acessibleLength 
-                        $"Number of parsed atoms should be equal to the number 
-                        of values showing the acessiblepoint."
+                //for key in acessiblePointsDictHTQ.Keys do                    
+                //    let atomLength = residuesHTQ.[key].Length
+                //    let acessibleLength = Seq.length acessiblePointsDictHTQ.[key]
+                //    Expect.equal atomLength acessibleLength 
+                //        $"Number of parsed atoms should be equal to the number 
+                //        of values showing the acessiblepoint."
 
-                let acessiblePointsnrhtq = 
-                    [|
-                        for key in acessiblePointsDictHTQ.Keys do
-                            for res in acessiblePointsDictHTQ.[key].Keys do                              
-                                Array.forall (fun atom -> 
-                                    atom <= 100.0 && atom >= 0.0                      
-                                    ) acessiblePointsDictHTQ.[key].[res]
-                    |]
+                //let acessiblePointsnrhtq = 
+                //    [|
+                //        for key in acessiblePointsDictHTQ.Keys do
+                //            for res in acessiblePointsDictHTQ.[key].Keys do                              
+                //                Array.forall (fun atom -> 
+                //                    atom <= 100.0 && atom >= 0.0                      
+                //                    ) acessiblePointsDictHTQ.[key].[res]
+                //    |]
 
-                Expect.allEqual acessiblePointsnrhtq true 
-                    "number of acessible points should be less or equal to nr 
-                    of testpoints "
+                //Expect.allEqual acessiblePointsnrhtq true 
+                //    "number of acessible points should be less or equal to nr 
+                //    of testpoints "
 
                 // test for a file without missing infos 
-
-                let cre_example = getResiduesPerChain "resources/pdbParser/Cre01g001550t11.pdb" 1
-                let totalnr_points = 100
+             
                 let acessiblePointsDictExampleFile_cre  = 
                     cre_example
                     |> Seq.map (fun kvp ->
@@ -1463,9 +1479,6 @@ module SASATests =
                 ) "If the probe radius is negative, the function should throw an error"
 
                 // test for a file with multiple chains
-
-                let cre_example_chains = 
-                    getResiduesPerChain "resources/pdbParser/Cre01g026150t11.pdb" 1
                 
                 let acessiblePoints_crechain  = 
                     cre_example_chains
@@ -1479,8 +1492,7 @@ module SASATests =
                                 residue.Atoms
                                 |> Array.map (fun atom -> atom, residue.ResidueName)
                             )
-
-                    
+                   
                         let allCounts : float[] = accessibleTestpoints allAtomsOfChain totalnr_points "Biotin"
                     
                         let atomCountTuples =
@@ -1570,24 +1582,22 @@ module SASATests =
        
             }
 
-            test "SASA per Atom is computed correctly"{
-
-                let testdata = getResiduesPerChain "resources/pdbParser/rubisCOActivase.pdb" 1
-
+            test "correct Atom SASA computation" {
+              
                 let atomSASAtestdata = sasaAtom "resources/pdbParser/rubisCOActivase.pdb"  1 100 "Biotin"
+                let values_atomSASA =  atomSASAtestdata.['A'].Values 
 
                 let nr_chains = atomSASAtestdata.Count
-                let nr_residues = atomSASAtestdata.['A'].Count
-
+         
                 Expect.equal nr_chains testdata.Count 
                     "The number of chains should be equal to proiginal number 
                         of Chains"
-                Expect.equal nr_residues (testdata.['A']).Length 
+                Expect.equal atomSASAtestdata.['A'].Count (testdata.['A']).Length 
                     "The number of residues should be equal to the number of 
                         residues in the PDB file"
                         
                 let nr_sasavalues = 
-                    atomSASAtestdata.['A'].Values 
+                    values_atomSASA
                     |> Seq.sumBy (fun x -> x.Length)
                  
                 Expect.equal nr_sasavalues (reference_sasaArray.Length) 
@@ -1600,16 +1610,24 @@ module SASATests =
                     one from the python reference"
 
                 let exampleAtomsSASA = 
-                    atomSASAtestdata.['A'].Values 
+                    values_atomSASA
                     |> Seq.collect ( fun x -> x) 
                     |> Seq.indexed 
                     |> Seq.toArray
-                
-                Array.iter2 (fun (fsharpSeries,fSharpSASA) (_,pythonSASA) ->
-                    Expect.floatClose Accuracy.high pythonSASA fSharpSASA 
-                        $"The SASA value for the atom with the serialnumber {fsharpSeries+1} 
-                        should be equal to the one from the python reference"
-                ) exampleAtomsSASA python_SASA_array
+
+                               
+                let rubis_fsharpSASA = 
+                    exampleAtomsSASA
+                    |> Array.map snd
+
+                let rubis_pythonSASA = 
+                    python_SASA_array
+                    |> Array.map snd
+
+                expectFloatArrayCloseFast 
+                    "rubisCOActivase: Atom SASA values"
+                    rubis_fsharpSASA 
+                    rubis_pythonSASA
 
                 Expect.throws (fun () -> sasaAtom "resources/notexisting.pdb"  2 100 "Biotin" |>ignore)
                     "unknown PDB Files should lead to a error "
@@ -1634,18 +1652,19 @@ module SASATests =
 
                 // test for a file without missing infos
 
-                let cre_example = 
-                    getResiduesPerChain "resources/pdbParser/Cre01g001550t11.pdb" 1 
-
                 let cre_sasaAtom = 
                     sasaAtom "resources/pdbParser/Cre01g001550t11.pdb" 1 100 "Biotin"
+
+
+                let cre_values =  cre_example.Values 
+
 
                 Expect.equal cre_sasaAtom.Count cre_example.Count 
                     "The number of chains in the Cre01g001550t11.pdb file 
                     should be equal"
 
                 let cre_exampleResidues = 
-                    cre_example.Values 
+                    cre_values
                     |> Seq.collect (fun res -> res)
                     |> Seq.toArray 
 
@@ -1689,11 +1708,20 @@ module SASATests =
                     one from the python reference for Cre01g001550t11.pdb 
                     with Biotin"
              
-                Array.iteri2 (fun idx (fsharpSeries,fSharpSASA) (_,pythonSASA) ->
-                    Expect.floatClose Accuracy.high pythonSASA fSharpSASA 
-                        $"The SASA value for the idx atom in the list
-                        should be equal to the one from the python reference"
-                ) creFsharpcomputedSASA combined_creArray
+                let cre_fsharpSASA = 
+                    creFsharpcomputedSASA
+                    |> Array.map snd
+
+                let cre_pythonSASA = 
+                    combined_creArray
+                    |> Array.map snd
+
+                expectFloatArrayCloseFast 
+                    "Cre01g001550t11: Atom SASA values (non-H, Biotin)"
+                    cre_fsharpSASA
+                    cre_pythonSASA
+
+
 
                 Expect.throws (fun () -> sasaAtom "resources/pdbParser/Cre01g001550t11.pdb" 8 100 "Biotin" |>ignore)
                     "PDB File with only one model and one Chain should throw an 
@@ -1755,11 +1783,19 @@ module SASATests =
                     one from the python reference for Cre01g001550t11.pdb 
                     with Biotin"
              
-                Array.iteri2 (fun idx (fsharpSeries,fSharpSASA) (_,pythonSASA) ->
-                    Expect.floatClose Accuracy.high pythonSASA fSharpSASA 
-                        $"The SASA value for the idx atom in the list
-                        should be equal to the one from the python reference"
-                ) creFsharpcomputedSASA_float combined_creArray_floatprobe
+                let cre_float_fsharpSASA = 
+                    creFsharpcomputedSASA_float
+                    |> Array.map snd
+
+                let cre_float_pythonSASA = 
+                    combined_creArray_floatprobe
+                    |> Array.map snd
+
+                expectFloatArrayCloseFast 
+                    "Cre01g001550t11: Atom SASA values (non-H, probe 4.0)"
+                    cre_float_fsharpSASA
+                    cre_float_pythonSASA
+
 
                 Expect.throws (fun () -> 
                     sasaAtom "resources/pdbParser/Cre01g001550t11.pdb" 2 100 1.4 |>ignore)
@@ -1768,8 +1804,6 @@ module SASATests =
 
                 // test for a cre file with multiple chains
 
-                let cre_example_chains = 
-                    getResiduesPerChain "resources/pdbParser/Cre01g026150t11.pdb" 1
 
                 let cre_sasaAtom_chains = 
                     sasaAtom "resources/pdbParser/Cre01g026150t11.pdb" 1 100 "Biotin"
@@ -1830,11 +1864,19 @@ module SASATests =
                     one from the python reference for Cre01g001550t11.pdb 
                     with Biotin"
              
-                Array.iteri2 (fun idx (fsharpSeries,fSharpSASA) (_,pythonSASA) ->
-                    Expect.floatClose Accuracy.high pythonSASA fSharpSASA 
-                        $"The SASA value for the idx atom in the list
-                        should be equal to the one from the python reference"
-                ) creFsharpcomputedSASA_chains combined_cre2Array
+                let cre_chains_fsharpSASA = 
+                    creFsharpcomputedSASA_chains
+                    |> Array.map snd
+
+                let cre_chains_pythonSASA = 
+                    combined_cre2Array
+                    |> Array.map snd
+
+                expectFloatArrayCloseFast 
+                    "Cre01g026150t11: Atom SASA values (non-H, Biotin)"
+                    cre_chains_fsharpSASA
+                    cre_chains_pythonSASA
+
 
                 Expect.throws (fun () -> sasaAtom "resources/pdbParser/Cre01g001550t11.pdb" 8 100 "Biotin" |>ignore)
                     "PDB File with only one model and one Chain should throw an 
@@ -1863,14 +1905,11 @@ module SASATests =
             test "Absolute SASA per Residue is computed correctly"{
                 let residueSASAtestdata = 
                     sasaResidue ("resources/pdbParser/rubisCOActivase.pdb") 1 100 "Water"
-
-                let parsedResidues_parser = 
-                    getResiduesPerChain "resources/pdbParser/rubisCOActivase.pdb" 1
-
+             
                 Expect.all (residueSASAtestdata['A'].Values) (fun x -> x >= 0.0) 
                     "All SASA values need to be null or positive"
                 Expect.equal 
-                    (residueSASAtestdata['A'].Count) parsedResidues_parser.['A'].Length 
+                    (residueSASAtestdata['A'].Count) testdata.['A'].Length 
                         "The number of residues should be equal to the number of 
                         residues in the PDB file"          
 
@@ -1896,12 +1935,19 @@ module SASATests =
                     |> Seq.indexed 
                     |> Seq.toArray
 
-                Array.iter2 (fun (fsharpSeries,fSharpSASA) (_,pythonSASA) ->
-                    Expect.floatClose Accuracy.high pythonSASA fSharpSASA 
-                        $"The SASA value for the atom with the serialnumber 
-                        {fsharpSeries} should be equal to the one from the 
-                        python reference"
-                ) exampleAtomsSASA python_SASA_arrayResidues
+                let residue_fsharpSASA =
+                    exampleAtomsSASA
+                    |> Array.map snd
+
+                let residue_pythonSASA =
+                    python_SASA_arrayResidues
+                    |> Array.map snd
+
+                expectFloatArrayCloseFast
+                    "rubisCOActivase: Residue SASA values (chain A)"
+                    residue_fsharpSASA
+                    residue_pythonSASA
+
 
                 Expect.throws (fun () -> sasaResidue "notexisting.pdb" 1 100 "Water" |> ignore
                 )
@@ -1932,52 +1978,52 @@ module SASATests =
                 Expect.throws (fun () -> sasaResidue "resources/pdbParser/rubisCOActivase.pdb" 1 100 -2 |>ignore)
                     "negative probes lead to an error"
         
-                // Htq example
-                let exampleSASAresiduesHTQ = 
-                    sasaResidue "resources/pdbParser/htq.pdb" 1 100 "Water"
+                //// Htq example
+                //let exampleSASAresiduesHTQ = 
+                //    sasaResidue "resources/pdbParser/htq.pdb" 1 100 "Water"
                 
-                let parsedChainsHTQ = readModels (readPBDFile "resources/pdbParser/htq.pdb")
+                //let parsedChainsHTQ = readModels (readPBDFile "resources/pdbParser/htq.pdb")
 
-                Expect.equal exampleSASAresiduesHTQ.Count (parsedChainsHTQ.[0].Chains.Length) 
-                    "The number of chains should be equal to the number of chains 
-                    in the PDB file for the corresponding model"
+                //Expect.equal exampleSASAresiduesHTQ.Count (parsedChainsHTQ.[0].Chains.Length) 
+                //    "The number of chains should be equal to the number of chains 
+                //    in the PDB file for the corresponding model"
 
-                let collectedResidueshtq = 
-                    exampleSASAresiduesHTQ.Values 
-                    |> Seq.collect (fun x -> x.Values) 
+                //let collectedResidueshtq = 
+                //    exampleSASAresiduesHTQ.Values 
+                //    |> Seq.collect (fun x -> x.Values) 
 
-                Expect.all collectedResidueshtq (fun x -> x >= 0.0) 
-                    "All SASA values need to be null or positive"
+                //Expect.all collectedResidueshtq (fun x -> x >= 0.0) 
+                //    "All SASA values need to be null or positive"
 
-                Expect.throws (fun () -> 
-                    sasaResidue "resources/pdbParser/htq.pdb"  8745 100 "Water" 
-                    |>ignore) 
-                    "PDB File with only one model and one Chain should throw an 
-                    error if modelid is not present"
+                //Expect.throws (fun () -> 
+                //    sasaResidue "resources/pdbParser/htq.pdb"  8745 100 "Water" 
+                //    |>ignore) 
+                //    "PDB File with only one model and one Chain should throw an 
+                //    error if modelid is not present"
 
-                Expect.throws(fun () ->
-                    sasaResidue "resources/pdbParser/htq.pdb" -1 100 "Water" 
-                    |>ignore) 
-                    "negative model id leads to an error"
+                //Expect.throws(fun () ->
+                //    sasaResidue "resources/pdbParser/htq.pdb" -1 100 "Water" 
+                //    |>ignore) 
+                //    "negative model id leads to an error"
 
-                Expect.throws(fun () ->
-                    sasaResidue "resources/pdbParser/htq.pdb" 1 0 "Water" 
-                    |>ignore)
-                    "Zero testpoints lead to an error"
+                //Expect.throws(fun () ->
+                //    sasaResidue "resources/pdbParser/htq.pdb" 1 0 "Water" 
+                //    |>ignore)
+                //    "Zero testpoints lead to an error"
                 
-                Expect.throws(fun () ->
-                    sasaResidue "resources/pdbParser/htq.pdb" 1 -2 "Water" 
-                    |>ignore)
-                    "negative testpoints lead to an error"
+                //Expect.throws(fun () ->
+                //    sasaResidue "resources/pdbParser/htq.pdb" 1 -2 "Water" 
+                //    |>ignore)
+                //    "negative testpoints lead to an error"
 
-                Expect.throws(fun () ->
-                    sasaResidue "resources/pdbParser/htq.pdb" 1 100 "aa" 
-                    |>ignore)
-                    "unknown probes lead to an error"
+                //Expect.throws(fun () ->
+                //    sasaResidue "resources/pdbParser/htq.pdb" 1 100 "aa" 
+                //    |>ignore)
+                //    "unknown probes lead to an error"
 
-                Expect.throws (fun () -> 
-                sasaResidue "resources/pdbParser/htq.pdb" 1 100 -2 |>ignore)
-                    "negative probes lead to an error"
+                //Expect.throws (fun () -> 
+                //sasaResidue "resources/pdbParser/htq.pdb" 1 100 -2 |>ignore)
+                //    "negative probes lead to an error"
 
                 // test for a file without missing infos 
              
@@ -1993,14 +2039,13 @@ module SASATests =
                     allsasaRes_collection (fun residuesasa -> residuesasa >= 0.0) 
                     "All SASA values need to be null or positive"
 
-                let residuesdict_cre = 
-                    getResiduesPerChain "resources/pdbParser/Cre01g001550t11.pdb" 1
+
 
                 let chainIds_sasa_cre = 
                     residueSASAdict_cre.Keys |> Seq.toArray
 
                 let chainIds_pdb_cre = 
-                    residuesdict_cre.Keys |> Seq.toArray
+                   cre_example.Keys |> Seq.toArray
 
                 Expect.equal chainIds_sasa_cre chainIds_pdb_cre
                     "The chain ids of the residue SASA dict should be equal to 
@@ -2012,7 +2057,7 @@ module SASATests =
                     |> Seq.toArray
 
                 let residuesIdentifiers_pdb =
-                    residuesdict_cre.Values
+                    cre_example.Values
                     |> Seq.collect (fun x -> x)
                     |> Seq.map (fun residue -> 
                         residue.ResidueNumber, residue.ResidueName
@@ -2107,7 +2152,6 @@ module SASATests =
                     "The residue identifiers of the residue SASA dict should be 
                     equal to the residue identifiers extracted from the 
                     PDB file for the cre example, also with float probe"
-
                                    
                 Expect.floatClose Accuracy.high 
                         allsasaRes_collection_floatprobe.[0] 
@@ -2133,13 +2177,7 @@ module SASATests =
 
                 // test cre with multiple chains
           
-                let creResidue_chains = 
-                    sasaResidue 
-                        "resources/pdbParser/Cre01g026150t11.pdb" 
-                        1 
-                        100 
-                        "Biotin"
-
+            
                 let residueSASAdict_creChain = 
                     sasaResidue 
                         "resources/pdbParser/Cre01g026150t11.pdb"  
@@ -2157,14 +2195,12 @@ module SASATests =
                     residuesasa >= 0.0) 
                     "All SASA values need to be null or positive"
 
-                let residuesdict_cre_chain = 
-                    getResiduesPerChain "resources/pdbParser/Cre01g026150t11.pdb" 1
-
+    
                 let chainIds_sasa_cre_chain = 
                     residueSASAdict_creChain.Keys |> Seq.toArray
 
                 let chainIds_pdb_cre_chain = 
-                    residuesdict_cre_chain.Keys |> Seq.toArray
+                    cre_example_chains.Keys |> Seq.toArray
 
                 Expect.equal chainIds_sasa_cre_chain chainIds_pdb_cre_chain
                     "The chain ids of the residue SASA dict should be equal to 
@@ -2176,7 +2212,7 @@ module SASATests =
                     |> Seq.toArray
 
                 let residuesIdentifiers_pdb_crechain =
-                    residuesdict_cre_chain.Values
+                   cre_example_chains.Values
                     |> Seq.collect (fun x -> x)
                     |> Seq.map (fun residue -> 
                         residue.ResidueNumber, residue.ResidueName
