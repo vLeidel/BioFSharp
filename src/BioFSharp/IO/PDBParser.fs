@@ -5,6 +5,7 @@ open BioFSharp.FileFormats.PDBParser
 open System
 open System.IO
 open System.Collections.Generic
+open System.Globalization
 
 module PDBParser =
 
@@ -123,7 +124,10 @@ module PDBParser =
     let parseFloatSpan (line: string) (startIdx: int) (length: int) (defaultVal: float) =
         let slice = line.Substring(startIdx, length).Trim()
         let mutable v = 0.0
-        if Double.TryParse(slice, &v) then v else defaultVal
+        if Double.TryParse(slice, NumberStyles.Any, CultureInfo.InvariantCulture, &v) then 
+            v 
+        else 
+            defaultVal
 
     // Function to parse the Atom informations from a PDB file    
     let readAtom (lines : seq<string>) : Atom array =
