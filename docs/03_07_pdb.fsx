@@ -195,7 +195,7 @@ structure:
 
 <figure>
     <img src="img/structural_part.png" alt="drawing" title="structural 
-    description of entry" width="80%"/> 
+    description of entry" width="60%"/> 
     <figcaption>
         <font size="2">
             <b>Fig.5. Structural part and connectivity in a PDB file</b>:<br> 
@@ -240,7 +240,7 @@ Structure contains several other informations stored in the hierarchy lower
 record types, which are atom,residue,chain and model (Fig.6). 
 
 <figure>
-    <img src="img/data_structure_diagram.png" alt="drawing" title="data structure" width="100%"/> 
+    <img src="img/data_structure_diagram.png" alt="drawing" title="data structure" width="60%"/> 
     <figcaption>
         <font size="2">
             <b>Fig.6. Data structure to describe PDB Record types</b>: <br> 
@@ -396,7 +396,7 @@ convert the item's informations to the corresponding Atom type fields (Fig.8).
 </p>
 
 <figure>
-<img src="img/atomparser.png" alt="drawing" title="data structure" width="100%"/> 
+<img src="img/atomparser.png" alt="drawing" title="data structure" width="60%"/> 
 <figcaption>
 <font size="2">
 <b>Fig.8. Function of a Atom Parser</b>: <br> 
@@ -516,6 +516,7 @@ Chain correspondance from the PDB file, that is read in, looks like.</summary>
 (***hide ***)
 readPBDFile ("data/rubisCOActivase.pdb")
 |> readChain
+|> Seq.take 3
 (***include-it:***)
 
 (**
@@ -551,6 +552,7 @@ readPBDFile ("data/rubisCOActivase.pdb")
 
 readPBDFile ("data/rubisCOActivase.pdb")
 |> readModels
+
 
 (**
 <details>
@@ -595,6 +597,7 @@ the linkages and the sites.</summary>
 (***hide ***)
 readPBDFile ("data/rubisCOActivase.pdb")
 |>readModels
+|> Seq.take 3
 (***include-it:***)
 
 (**

@@ -38,7 +38,7 @@ the relative SASA for residues we can categorize the amino acids of any protein
 into exposed and buried.
 
 <figure>
-    <img src="img/overviewSASA.png" alt="drawing" title="SASA analysis" width="100%"/> 
+    <img src="img/overviewSASA.png" alt="drawing" title="SASA analysis" width="80%"/> 
     <figcaption>
         <font size="2">
             <b>Fig.1. Overview of the SASA analysis</b>: <br> 
@@ -265,10 +265,9 @@ in one residue. To decide, which Location for one atom is kept we use two criter
 <li> if two atoms have the same occupancy, we take the one with the AltLoc 'A' or ' ' 
 (empty) </li>
 </ol>
-(Fig.4)
 
 <figure>
-    <img src="img/altLoc.png" alt="drawing" title="isolate single altloc" width="100%"/> 
+    <img src="img/altLoc.png" alt="drawing" title="isolate single altloc" width="80%"/> 
     <figcaption>
         <font size="2">
             <b>Fig.4. Filter best Alternative Location</b>: <br> 
@@ -304,19 +303,6 @@ Here on the example of the residuearray shown above. </summary>
 *)
 
 (**
-<details>
-<summary> Click here to see how the proof looks like to see that some data are 
-removed </summary>
-*)
-
-(filterBestAltLoc residuearray) <> residuearray
-(***include-it:***)
-
-(**
-</details>
-*)
-
-(**
 <p>
 The main function is the <b> getResiduePerChain </b> function, which 
 has as input the path as well as the modelid of the model to isolate. The output 
@@ -326,7 +312,7 @@ residuearray the filtered residues present in this chain (Fig.5).
 
 <figure>
     <img src="img/extractResidues.png" alt="drawing" title="create Dictionary 
-    of extracted residues" width="100%"/> 
+    of extracted residues" width="60%"/> 
     <figcaption>
         <font size="2">
             <b>Fig.5. Dictionary of extracted residues per chain id:</b>: <br> 
@@ -427,7 +413,7 @@ and the SASA array as value (Fig.6).
 </p>
 
 <figure>
-    <img src="img/sasaAtom.png" alt="drawing" title="sasa atom" width="100%"/> 
+    <img src="img/sasaAtom.png" alt="drawing" title="sasa atom" width="80%"/> 
     <figcaption>
         <font size="2">
             <b>Fig.6. Result of sasaAtom</b>: <br> 
@@ -492,7 +478,7 @@ Residue number and Residue name, and a Value that is the absolute SASA of the re
 </p>
 
 <figure>
-    <img src="img/sasaResidue.png" alt="drawing" title="residue sasa structure" width="100%"/> 
+    <img src="img/sasaResidue.png" alt="drawing" title="residue sasa structure" width="60%"/> 
     <figcaption>
         <font size="2">
             <b>Fig.7. Result of sasaAtom</b>: <br> 
