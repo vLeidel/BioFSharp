@@ -10,6 +10,7 @@ open System
 open System.Collections.Generic
 open System.Threading.Tasks
 open System.IO 
+open System.Reflection
 
 
 module commonvdWraadi = 
@@ -481,11 +482,60 @@ module SASA =
        
     // dictionary with maxSASAvalues of proteinogen amino acids 
 
+    let private getEmbeddedTripeptideFolder () =
+        let asm = typeof<Atom>.Assembly
+
+        let resourceNames =
+            asm.GetManifestResourceNames()
+            |> Array.filter (fun name ->
+                name.Contains("Resources.rsa_tripeptide") &&
+                name.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase)
+            )
+
+        if Array.isEmpty resourceNames then
+            failwith "No embedded rsa_tripeptide reference PDB files found in assembly."
+
+        let targetRoot =
+            Path.Combine(
+                Path.GetTempPath(),
+                "BioFSharp",
+                "rsa_tripeptide"
+            )
+
+        Directory.CreateDirectory(targetRoot) |> ignore
+
+        for resourceName in resourceNames do
+            let fileName =
+                resourceName.Split('.')
+                |> Array.rev
+                |> fun parts ->
+                    match parts with
+                    | [| "pdb"; name |] -> name + ".pdb"
+                    | [| "pdb"; name; subfolder |] -> name + ".pdb"
+                    | _ ->
+                        let idx = resourceName.LastIndexOf("rsa_tripeptide.", StringComparison.Ordinal)
+                        if idx >= 0 then
+                            resourceName.Substring(idx + "rsa_tripeptide.".Length)
+                        else
+                            resourceName
+
+            let outPath = Path.Combine(targetRoot, fileName)
+
+            if not (File.Exists outPath) then
+                use input = asm.GetManifestResourceStream(resourceName)
+                if isNull input then
+                    failwithf "Embedded resource not found: %s" resourceName
+
+                use output = File.Create(outPath)
+                input.CopyTo(output)
+
+        targetRoot
+
+
+
     let maxSASA (modelid:  int) (nrPoints: int) (probe) =
             
-        let rootFolder =  Path.GetFullPath(
-            Path.Combine(AppContext.BaseDirectory, "Resources", "rsa_tripeptide")
-        )
+        let rootFolder = getEmbeddedTripeptideFolder ()
 
         if not (Directory.Exists rootFolder) then
             failwithf "no reference found: %s" rootFolder

@@ -124,7 +124,7 @@
     <EmbeddedResource Include="Resources\PAM70.txt" />
     <EmbeddedResource Include="Resources\AminoAcidProperties.txt" />
     <EmbeddedResource Include="Resources\BLOSUM62.txt" />
-	<EmbeddedResource Include="Resources\**\*.pdb" CopyToOutputDirectory="Always" />
+	<EmbeddedResource Include="Resources\rsa_tripeptide\*.pdb" CopyToOutputDirectory="Always" />
     <Compile Include="Formatting.fs" />
     <None Include="Playground.fsx" />
     <!-- Playground -->
