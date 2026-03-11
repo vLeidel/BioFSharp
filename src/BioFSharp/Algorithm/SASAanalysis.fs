@@ -483,7 +483,9 @@ module SASA =
 
     let maxSASA (modelid:  int) (nrPoints: int) (probe) =
             
-        let rootFolder = Path.Combine(__SOURCE_DIRECTORY__, "../Resources/rsa_tripeptide")
+        let rootFolder =  Path.GetFullPath(
+            Path.Combine(AppContext.BaseDirectory, "Resources", "rsa_tripeptide")
+        )
 
         if not (Directory.Exists rootFolder) then
             failwithf "no reference found: %s" rootFolder
